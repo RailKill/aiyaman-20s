@@ -93,15 +93,15 @@ def draw_jimmy args
     start_x = 1300
     end_x = 800
     current_x = start_x + (end_x - start_x) * progress
-    jims_y = 40
+    current_y = 40
 
     # Draw the sprite at the interpolated position.
-    args.outputs.sprites << { x: current_x, y: jims_y, w: 312, h: 386, path: "sprites/jimmy/throw-0.png"}
+    args.outputs.sprites << { x: current_x, y: current_y, w: 312, h: 386, path: "sprites/jimmy/throw-0.png"}
 
     # Draw jimmy's equipments together with him as well.
-    args.outputs.sprites << { x: current_x - 40, y: jims_y + 230, w: 76, h: 46, path: "sprites/gun-0.png" }
-    args.outputs.sprites << { x: current_x + 270, y: jims_y + 310, w: 56, h: 66, path: "sprites/shuriken.png" }
-    args.outputs.sprites << { x: current_x + 130, y: jims_y + 310, w: 60, h: 20, path: "sprites/sunglasses.png" }
+    args.outputs.sprites << { x: current_x - 40, y: current_y + 230, w: 76, h: 46, path: "sprites/gun-0.png" }
+    args.outputs.sprites << { x: current_x + 270, y: current_y + 310, w: 56, h: 66, path: "sprites/shuriken.png" }
+    args.outputs.sprites << { x: current_x + 130, y: current_y + 310, w: 60, h: 20, path: "sprites/sunglasses.png" }
   end
 end
 
