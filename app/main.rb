@@ -6,18 +6,10 @@ def tick args
   args.state.angles["lightbowl"] ||= [0, -45, 45]
   args.state.angles["magnet"] ||= [0, -90, -180, -270]
   args.state.angles["table"] ||= [0, -45, 45]
-
   args.state.birdflip ||= 0
   args.state.highlights ||= {}
   args.state.rotations ||= {}
   args.state.timer ||= args.state.tick_count
-
-  # Draw aiyaman.
-  one_time_animation args
-
-  # Draw timer.
-  args.outputs.labels << {x: 170, y: 312, text: "%05.2f" % countdown(args).to_s, size_enum: 8,
-      r: args.state.highlights["clock"] == 1 ? 225 : 0}
 
   # Draw static sprites.
   args.outputs.sprites << {x: 0, y: 120, w: 1280, h: 660, path: "sprites/wall.png"}
@@ -36,53 +28,42 @@ def tick args
   draw_interactable(args, "table", {x: 540, y: 60, w: 248, h: 165})
   draw_interactable(args, "tnp", {x: 905, y: 481, w: 140, h: 164}, "frame")
 
+  # Draw aiyaman.
+  draw_aiyaman args
+
+  # Draw jimmy.
+  draw_jimmy args
+
+  # Draw timer.
+  args.outputs.labels << {x: 170, y: 312, text: "%05.2f" % countdown(args).to_s, size_enum: 8,
+      r: args.state.highlights["clock"] == 1 ? 225 : 0}
+
+  # Prompts player to start the game.
+  start_game args
 end
+
 
 # Returns the time remaining in seconds from args.state.timer.
 def countdown args
-  return [20 - args.state.timer.elapsed_time / 60, 0].max
+  countdown = 20
+  return args.state.is_playing ? [countdown - args.state.timer.elapsed_time / 60, 0].max : countdown
 end
 
-# This function shows how to animate a sprite that executes
-# only once when the "f" key is pressed.
-def one_time_animation args
-  # This is just a label the shows instructions within the game.
-  args.outputs.labels <<  { x: 220, y: 350, text: "(press f to animate)" }
 
-  # If "f" is pressed on the keyboard...
-  if args.inputs.keyboard.key_down.f
-    # Print the frame that "f" was pressed on.
-    puts "Hello from main.rb! The \"f\" key was in the down state on frame: #{args.state.tick_count}"
-
-    # And MOST IMPORTANTLY set the point it time to start the animation,
-    # equal to "now" which is represented as args.state.tick_count.
-
-    # Also IMPORTANT, you'll notice that the value of when to start looping
-    # is stored in `args.state`. This construct's values are retained across
-    # executions of the `tick` method.
-    args.state.start_looping_at = args.state.timer = args.state.tick_count
-  end
-
-  # These are the same local variables that were defined
-  # for the `looping_animation` function.
+# Draws the main protagonist on to the screen.
+def draw_aiyaman args
+  # Number of sprites in the animation.
   number_of_sprites = 7
-  number_of_frames_to_show_each_sprite = 4
+  # Number of frames to hold the sprite for.
+  frames_per_sprite = 4
+  # Set if the animation is looping or not. The frame_index function returns nil if animation time has passed.
+  is_looping = false
 
-  # Except this sprite does not loop again. If the animation time has passed,
-  # then the frame_index function returns nil.
-  does_sprite_loop = false
+  # Calculate the index for the sprite to be displayed based on animation_start.
+  sprite_index = args.state.animation_start.frame_index(number_of_sprites, frames_per_sprite, is_looping)
 
-  sprite_index = args.state
-                     .start_looping_at
-                     .frame_index number_of_sprites,
-                                  number_of_frames_to_show_each_sprite,
-                                  does_sprite_loop
-
-  # This line sets the frame index to zero, if
-  # the animation duration has passed (frame_index returned nil).
-
-  # Remeber: we are not looping forever here.
-  sprite_index ||= 0
+  # When sprite_index is nil due to animation end, set it to the second last sprite.
+  sprite_index ||= args.state.is_playing ? number_of_sprites - 2 : 0
 
   # Present the sprite.
   args.outputs.sprites << { x: 300, y: 40, w: 255, h: 435, path: "sprites/aiyaman/stand-#{sprite_index}.png" }
@@ -92,7 +73,7 @@ end
 # This draws an interactable sprite where it can be selected by the player to change its state in the game.
 def draw_interactable(args, id, rect, combine = id)
   # Highlight sprite when mouse is inside the sprite's rectangle.
-  args.state.highlights[id] = (args.inputs.mouse.inside_rect? rect) ? 1 : 0
+  args.state.highlights[id] = args.state.is_playing && args.inputs.mouse.inside_rect?(rect) ? 1 : 0
 
   # Update the rotation of the sprite.
   rotated = rotate(args, id, rect)
@@ -102,18 +83,41 @@ def draw_interactable(args, id, rect, combine = id)
 end
 
 
+# Draws the main antagonist onto the screen.
+def draw_jimmy args
+  if args.state.is_playing
+    # Get a normalized value from 0 to 1 of the progress of the ease function (tweening).
+    progress = args.state.animation_start.ease(0.5.seconds, :flip, :quad, :flip)
+
+    # Calculate current position.
+    start_x = 1300
+    end_x = 800
+    current_x = start_x + (end_x - start_x) * progress
+    jims_y = 40
+
+    # Draw the sprite at the interpolated position.
+    args.outputs.sprites << { x: current_x, y: jims_y, w: 312, h: 386, path: "sprites/jimmy/throw-0.png"}
+
+    # Draw jimmy's equipments together with him as well.
+    args.outputs.sprites << { x: current_x - 40, y: jims_y + 230, w: 76, h: 46, path: "sprites/gun-0.png" }
+    args.outputs.sprites << { x: current_x + 270, y: jims_y + 310, w: 56, h: 66, path: "sprites/shuriken.png" }
+    args.outputs.sprites << { x: current_x + 130, y: jims_y + 310, w: 60, h: 20, path: "sprites/sunglasses.png" }
+  end
+end
+
+
 # Rotate a given rect of an interactable if interact button is triggered.
 def rotate(args, id, rect)
-  # Some interactables don't have initial values declared, we'll rectify that here.
+  # Declare initial variables for interactables' angles and rotations.
   args.state.angles[id] ||= []
   args.state.rotations[id] ||= 0
 
-  # Get the array which specifies the rotation angles available for the given id.
+  # Get the maximum index of the rotation angles available for the given id.
   limit = args.state.angles[id].length - 1
 
   # Increment the rotation index by one if there is a mouse click on the interactable.
   is_mouse_over = args.inputs.mouse.inside_rect? rect
-  increment = args.state.rotations[id] + (is_mouse_over && args.inputs.mouse.click ? 1 : 0)
+  increment = args.state.rotations[id] + (args.state.is_playing && is_mouse_over && args.inputs.mouse.click ? 1 : 0)
 
   # Try to increment the index now, but reset to 0 if exceeds the length of the limit array.
   next_index = args.state.angles[id] && increment <= limit ? increment : 0
@@ -123,4 +127,22 @@ def rotate(args, id, rect)
 
   # Merge the angle into the rect hash so that it can be drawn.
   return rect.merge({angle: args.state.angles[id][next_index]})
+end
+
+
+# Game start check.
+def start_game args
+  if !args.state.is_playing
+    # If the game has not started yet, display instructions.
+    args.outputs.labels <<  { x: 640, y: 360, text: "Press 'Space' to Start",
+        alignment_enum: 1, vertical_alignment_enum: 1 }
+    
+    if args.inputs.keyboard.key_down.space
+      # If the player press space, set the game started flag to true.
+      args.state.is_playing = true
+
+      # Reset animation and timers.
+      args.state.animation_start = args.state.timer = args.state.tick_count
+    end
+  end
 end
