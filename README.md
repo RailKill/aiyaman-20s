@@ -18,23 +18,27 @@ This includes the following third-party assets that were used for this game:
 
 
 ### Thoughts on DragonRuby GTK
-I took this game jam as an opportunity to try out something new for game development, and I must say that I am highly
+I joined this game jam as an opportunity to try out something new for game development, and I must say that I am highly
 impressed by the elegance of DragonRuby. It provides excellent control over what you want to output to the player,
 with plenty of built-in functions that are actually much more lean and specific compared to any other game engine I've
-come across so far. It is tiny, efficient, builds to various platforms and provides a in-game console right out of
-the box.
+come across so far. It is extremely tiny, extremely efficient, builds to various platforms, provides an in-game
+console and hot-swapping code instantaneously right out of the box. This sentence alone is enough to impress any
+programmer.
 
 It is very powerful in the hands of a computer scientist and a software engineer, though not so
-much an artist or a game developer. Programming with DragonRuby requires a more functional and mathematical approach
-as compared to the more intuitive GUI workflows of other game engines like Unity. This is not a bad thing; it fills
-a niche in game development methodology, and is very refreshing to see. You have a lot of control just by code alone,
-all this power at your fingertips with zero bloat.
+much an artist or game developers in general. Programming with DragonRuby requires a more functional and mathematical
+approach compared to the more intuitive GUI workflows of other game engines like Unity. This is not a bad thing; it
+fills an engineering niche in game development methodology, and is very refreshing to see. You have a lot of
+control just by code alone - all this power at your fingertips with zero bloat.
 
 It is unfortunate that it is behind a paywall which makes it difficult for it to be popular compared to more rounded,
-open-source and feature-packed game engines like Godot. Not only that, its documentation is quite poor.
+open-source, free and feature-packed game engines like Godot. Luckily, they are giving out free copies once in a while
+but there needs to be a better way to entice users to at least try it out. Not only that, its documentation is poor.
 As of 29th November 2022, methods like `Numeric#randomize` and `args.audio.delete` were used and dumped in various code
 snippets, but not actually explained. While I don't mind reading through code, they need to belong in the
 right sections in the table of contents for users to be able to look it up.
 
-Overall, I find DragonRuby powerful and fun to use. However, its pricing makes it very difficult for me to recommend.
-If you could get this for free in a game jam like I did, it is definitely worth your time.
+Overall, I find DragonRuby robust and fun to use. I think the asking price for the Standard License (lifetime, USD$32)
+is more than justified, though I am highly against any form of subscription-based plans in principle. If certain
+features require this to happen, it would be best to forego them to support a more libre approach - then perhaps a
+lifetime license could be offered for the Pro version.
