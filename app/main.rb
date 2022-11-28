@@ -7,8 +7,16 @@ def tick args
   args.state.angles['magnet'] ||= [0, -90, -180, -270]
   args.state.angles['table'] ||= [0, -45, 45]
   args.state.birdflip ||= 0
+
+  # Define the path the bullet can take during the shootout phase.
+  args.state.bullet_phase = 0
+  args.state.bullet_paths = [
+    [{start_x: 700, end_x: 400, start_y: 304, end_y: 304}]
+  ]
+
   args.state.highlights ||= {}
   args.state.rotations ||= {}
+  args.state.seconds_to_live ||= 20
   args.state.timer ||= args.state.tick_count
 
   # Draw static sprites.
@@ -28,25 +36,63 @@ def tick args
   draw_interactable(args, 'table', {x: 540, y: 60, w: 248, h: 165})
   draw_interactable(args, 'tnp', {x: 905, y: 481, w: 140, h: 164}, 'frame')
 
-  # Draw aiyaman.
+  # Draw characters.
   draw_aiyaman args
-
-  # Draw jimmy.
+  draw_bullet args
   draw_jimmy args
 
   # Draw timer.
   args.outputs.labels << {x: 170, y: 312, text: "%05.2f" % countdown(args).to_s, size_enum: 8,
       r: args.state.highlights['clock'] == 1 ? 225 : 0}
 
-  # Prompts player to start the game.
-  start_game args
+  # Prompts player to start the game, or show failure message if game ended.
+  check_game_state args
+end
+
+
+# Game start, fail state and music check.
+def check_game_state args
+  if !args.state.is_playing
+    # If the game has not started yet, display instructions.
+    args.outputs.labels <<  { x: 640, y: 360, text: 'Press "Space" to Start',
+        alignment_enum: 1, vertical_alignment_enum: 1 }
+
+    # Start a music loop at the beginning of the game. By default, .ogg files are looped forever.
+    args.audio[:music] ||= { input: 'sounds/reverse-time.ogg', looping: true, gain: 0.2 }
+    
+    if args.inputs.keyboard.key_down.space
+      # If the player press space, set the game started flag to true.
+      args.state.is_playing = true
+
+      # Stop currently playing music and load the time-stop music.
+      args.audio.delete :music
+      args.audio[:music] = { input: 'sounds/time-stop.ogg',  gain: 0.2 }
+
+      # Reset animation and timers.
+      args.state.animation_start = args.state.timer = args.state.tick_count
+    end
+  end
+
+  # If the player has failed, show failure label.
+  if args.state.failure
+    message = 'You have died. Press "Space" or "R" to restart.'
+    cause = 'Try clicking various objects in the environment.'
+
+    args.outputs.labels << { x: 640, y: 374, text: message, alignment_enum: 1, vertical_alignment_enum: 1 }
+    args.outputs.labels << { x: 640, y: 346, text: cause, alignment_enum: 1, vertical_alignment_enum: 1, size_enum: -2 }
+  end
+
+  # Allow game reset.
+  if args.inputs.keyboard.key_down.r || args.state.failure && args.inputs.keyboard.key_down.space
+    args.gtk.reset
+  end
 end
 
 
 # Returns the time remaining in seconds from args.state.timer.
 def countdown args
-  countdown = 20
-  return args.state.is_playing ? [countdown - args.state.timer.elapsed_time / 60, 0].max : countdown
+  time = args.state.seconds_to_live
+  return args.state.is_playing ? [time - args.state.timer.elapsed_time / 60, 0].max : time
 end
 
 
@@ -63,20 +109,61 @@ def draw_aiyaman args
   sprite_index = args.state.animation_start.frame_index(number_of_sprites, frames_per_sprite, is_looping)
 
   # When sprite_index is nil due to animation end, set it to the second last sprite.
-  sprite_index ||= args.state.is_playing ? number_of_sprites - 2 : 0
+  sprite_index ||= args.state.failure ? number_of_sprites : args.state.is_playing ? number_of_sprites - 2 : 0
 
+  # Send aiyaman flying if failure state is reached.
+  if args.state.failure
+    knockback_progress = args.state.failure.ease(1.seconds, :flip, :quad, :flip)
+    current_rotation = 90 * knockback_progress
+    current_x = 300 + -680 * knockback_progress
+    current_y = 40 + -20 * knockback_progress
+  end
+
+  # Set default x, y and rotation values.
+  current_rotation ||= 0
+  current_x ||= 300
+  current_y ||= 40
+  
   # Present the sprite.
-  args.outputs.sprites << { x: 300, y: 40, w: 255, h: 435, path: "sprites/aiyaman/stand-#{sprite_index}.png" }
+  args.outputs.sprites << { x: current_x, y: current_y, w: 255, h: 435, angle: current_rotation,
+      path: "sprites/aiyaman/stand-#{sprite_index}.png" }
+end
+
+
+# Draws the bullet, which only happens when during end-game shootout where 'args.state.is_ending' is true.
+def draw_bullet args
+  if args.state.is_ending && args.state.shootout_start
+    interpolation = args.state.shootout_start.ease(3, :identity)
+    start_x = 700
+    end_x = 400
+    current_x = start_x + (end_x - start_x) * interpolation
+
+    if current_x != end_x
+      # Draw the bullet sprite moving to its path.
+      args.outputs.sprites << { x: current_x, y: 304, w: 108, h: 12, path: 'sprites/bullet-0.png' }
+    else
+      # The bullet reached aiyaman. End the game in failure.
+      args.state.failure ||= args.state.tick_count
+    end
+  end
 end
 
 
 # This draws an interactable sprite where it can be selected by the player to change its state in the game.
 def draw_interactable(args, id, rect, combine = id)
-  # Highlight sprite when mouse is inside the sprite's rectangle.
-  args.state.highlights[id] = args.state.is_playing && args.inputs.mouse.inside_rect?(rect) ? 1 : 0
+  # Highlight sprite if the game is active and when mouse is inside the sprite's rectangle.
+  args.state.highlights[id] = args.state.is_playing && !args.state.is_ending &&
+      args.inputs.mouse.inside_rect?(rect) ? 1 : 0
 
   # Update the rotation of the sprite.
   rotated = rotate(args, id, rect)
+
+  # If clock is interacted with, trigger end game shootout.
+  if id == 'clock' && !args.state.is_ending && args.state.is_playing &&
+        args.inputs.mouse.inside_rect?(rect) && args.inputs.mouse.click
+    args.state.is_ending = true
+    args.state.seconds_to_live = 0
+  end
 
   # Draw the sprite.
   args.outputs.sprites << rotated.merge({path: "sprites/#{id}-#{args.state.highlights[combine]}.png"})
@@ -95,11 +182,28 @@ def draw_jimmy args
     current_x = start_x + (end_x - start_x) * progress
     current_y = 40
 
+    # Make jimmy shoot gun when countdown reaches zero.
+    if countdown(args) == 0
+      # Set the shootout start time to the current tick, once.
+      args.state.shootout_start ||= args.state.tick_count
+
+      # Calculate for how long should the gun be animated.
+      gun_index = args.state.shootout_start.frame_index(2, 4, false)
+
+      # Play gunshot sound only once.
+      if args.state.shootout_start == args.state.tick_count
+        args.outputs.sounds << 'sounds/gunshot.wav'
+      end
+    end
+    
+    gun_index ||= 0
+
     # Draw the sprite at the interpolated position.
     args.outputs.sprites << { x: current_x, y: current_y, w: 312, h: 386, path: 'sprites/jimmy/throw-0.png'}
 
     # Draw jimmy's equipments together with him as well.
-    args.outputs.sprites << { x: current_x - 40, y: current_y + 230, w: 76, h: 46, path: 'sprites/gun-0.png' }
+    args.outputs.sprites << { x: current_x - 40, y: current_y + 230, w: 76, h: 46,
+        path: "sprites/gun-#{gun_index}.png" }
     args.outputs.sprites << { x: current_x + 270, y: current_y + 310, w: 56, h: 66, path: 'sprites/shuriken.png' }
     args.outputs.sprites << { x: current_x + 130, y: current_y + 310, w: 60, h: 20, path: 'sprites/sunglasses.png' }
   end
@@ -115,8 +219,9 @@ def rotate(args, id, rect)
   # Get the maximum index of the rotation angles available for the given id.
   limit = args.state.angles[id].length - 1
 
-  # Increment the rotation index by one if there is a mouse click on the interactable.
-  is_rotated = args.state.is_playing && args.inputs.mouse.inside_rect?(rect) && args.inputs.mouse.click
+  # Increment the rotation index by one if the game is active and there is a mouse click on the interactable.
+  is_rotated = args.state.is_playing && !args.state.is_ending &&
+      args.inputs.mouse.inside_rect?(rect) && args.inputs.mouse.click
   increment = args.state.rotations[id] + (is_rotated ? 1 : 0)
   
   # Play sound if interactable is being rotated.
@@ -142,29 +247,4 @@ def rotate(args, id, rect)
 
   # Merge the angle into the rect hash so that it can be drawn.
   return rect.merge({angle: args.state.angles[id][next_index]})
-end
-
-
-# Game start check.
-def start_game args
-  if !args.state.is_playing
-    # If the game has not started yet, display instructions.
-    args.outputs.labels <<  { x: 640, y: 360, text: 'Press "Space" to Start',
-        alignment_enum: 1, vertical_alignment_enum: 1 }
-
-    # Start a music loop at the beginning of the game. By default, .ogg files are looped forever.
-    args.audio[:music] ||= { input: 'sounds/reverse-time.ogg', looping: true, gain: 0.2 }
-    
-    if args.inputs.keyboard.key_down.space
-      # If the player press space, set the game started flag to true.
-      args.state.is_playing = true
-
-      # Stop currently playing music and load the time-stop music.
-      args.audio.delete :music
-      args.audio[:music] = { input: 'sounds/time-stop.ogg',  gain: 0.2 }
-
-      # Reset animation and timers.
-      args.state.animation_start = args.state.timer = args.state.tick_count
-    end
-  end
 end
