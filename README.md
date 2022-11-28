@@ -41,4 +41,11 @@ right sections in the table of contents for users to be able to look it up.
 Overall, I find DragonRuby robust and fun to use. I think the asking price for the Standard License (lifetime, USD$32)
 is more than justified, though I am highly against any form of subscription-based plans in principle. If certain
 features require this to happen, it would be best to forego them to support a more libre approach - then perhaps a
-lifetime license could be offered for the Pro version.
+lifetime license could be offered for the Pro version. Lastly, while I believe the Standard License pricing is more
+than fair, I don't think their stance on open source and copyright is commendable. The creators of DragonRuby want to
+make money to continue doing what they love, simple as that - they shouldn't be twisting words in their documentation
+about open source being unsustainable or needing to be more "ethical" because nothing about open source and copyleft
+forbids commercialization or monetization. A simple "we made this engine to be sold as a product; we run a business
+and believe this will allow us to make more money" would be far more appealing than trying to rationalize away
+from FOSS. If the developers don't know how to garner support even at this basic level, I worry that such an
+outstanding game engine may never see enough adoption.
