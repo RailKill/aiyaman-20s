@@ -46,6 +46,6 @@ than fair, I don't think their stance on open source and copyright is commendabl
 make money to continue doing what they love, simple as that - they shouldn't be twisting words in their documentation
 about open source being unsustainable or needing to be more "ethical" because nothing about open source and copyleft
 forbids commercialization or monetization. A simple "we made this engine to be sold as a product; we run a business
-and believe this method will allow us to make more money" would be far more appealing than trying to rationalize away
-from FOSS. If the developers don't know how to garner support even at this basic level, I worry that such an
-outstanding game engine may never see enough adoption.
+and believe this method will allow us to make more money, and in turn do better" would be far more appealing than
+trying to rationalize away from FOSS. If the developers don't know how to garner support even at this basic level,
+I worry that such an outstanding game engine may never see enough adoption.
