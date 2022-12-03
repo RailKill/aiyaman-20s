@@ -5,14 +5,12 @@ def tick args
   args.state.angles['gas'] ||= [0, -90]
   args.state.angles['lightbowl'] ||= [0, -45, 45]
   args.state.angles['magnet'] ||= [0, -90, -180, -270]
+  args.state.angles['magnetbroken'] ||= [0, -90, -180, -270]
   args.state.angles['table'] ||= [0, -45, 45]
   args.state.birdflip ||= 0
 
   # Define the path the bullet can take during the shootout phase.
-  args.state.bullet_phase = 0
-  args.state.bullet_paths = [
-    [{start_x: 700, end_x: 400, start_y: 304, end_y: 304}]
-  ]
+  args.state.bullet_phase ||= 0
 
   args.state.highlights ||= {}
   args.state.rotations ||= {}
@@ -31,9 +29,9 @@ def tick args
   draw_interactable(args, 'gas', {x: 1050, y: 60, w: 128, h: 260, angle_anchor_y: 0.2})
   draw_interactable(args, 'lightbowl', {x: 635, y: 550, w: 70, h: 48, angle_anchor_y: 0.7})
   draw_interactable(args, 'lightfixture', {x: 660, y: 580, w: 21, h: 140})
-  draw_interactable(args, 'magnet', {x: 230, y: 470, w: 78, h: 88})
+  draw_interactable(args, 'magnet' + (args.state.is_magnet_destroyed ? 'broken' : ''), {x: 230, y: 470, w: 78, h: 88})
   draw_interactable(args, 'pizzamonster', {x: 903, y: 484, w: 154, h: 130}, 'frame')
-  draw_interactable(args, 'table', {x: 540, y: 60, w: 248, h: 165})
+  draw_interactable(args, 'table', {x: 540, y: args.state.rotations['table'] == 0 ? 60 : 120, w: 248, h: 165})
   draw_interactable(args, 'tnp', {x: 905, y: 481, w: 140, h: 164}, 'frame')
 
   # Draw characters.
@@ -132,18 +130,40 @@ end
 
 # Draws the bullet, which only happens when during end-game shootout where 'args.state.is_ending' is true.
 def draw_bullet args
-  if args.state.is_ending && args.state.shootout_start
-    interpolation = args.state.shootout_start.ease(3, :identity)
-    start_x = 700
-    end_x = 400
-    current_x = start_x + (end_x - start_x) * interpolation
+  #args.outputs.sprites << { x: 1000, y: 400, w: 108, h: 12, angle: 155, path: 'sprites/bullet-0.png' }
 
-    if current_x != end_x
-      # Draw the bullet sprite moving to its path.
-      args.outputs.sprites << { x: current_x, y: 304, w: 108, h: 12, path: 'sprites/bullet-0.png' }
+  if args.state.is_ending && args.state.shootout_start
+    # Interpolate the x and y positions given the bullet path of the current bullet phase.
+    interpolation = args.state.bullet_bounce.ease(3, :identity)
+    path = args.state.bullet_paths[args.state.bullet_phase]
+    current_x = path.start_x + (path.end_x - path.start_x) * interpolation
+    current_y = path.start_y + (path.end_y - path.start_y) * interpolation
+
+    # If the bullet is still travelling, draw the bullet sprite moving to its path.
+    if current_x != path.end_x || current_y != path.end_y
+      args.outputs.sprites << { x: current_x, y: current_y, w: 108, h: 12, angle: path.angle,
+          path: 'sprites/bullet-0.png' }
+    # Otherwise, go to next bullet path and play ricochet impact sound.
+    elsif args.state.bullet_phase + 1 < args.state.bullet_paths.length
+      args.state.bullet_phase += 1
+      args.state.bullet_bounce = args.state.tick_count
+      args.outputs.sounds << "sounds/metal-impact-#{rand(3)}.wav"
+    # The bullet reached the end of its path.
     else
-      # The bullet reached aiyaman. End the game in failure.
-      args.state.failure ||= args.state.tick_count
+      # It reached aiyaman. End the game in failure.
+      if current_x == 400 && current_y <= 360
+        args.state.failure ||= args.state.tick_count
+      # It reached the magnet. Destroy it.
+      elsif current_x == 260 && current_y == 490
+        args.state.is_magnet_destroyed = true
+        args.state.rotations['magnetbroken'] = args.state.rotations['magnet']
+      # It reached jimmy. Remove sunglasses.
+      elsif current_x == 860 && current_y == 380
+        args.state.sunglasses_removed ||= args.state.tick_count
+      # It reached the shuriken. Drop it.
+      elsif current_x == 1000 && current_y == 400
+        args.state.shuriken_dropped ||= args.state.tick_count
+      end
     end
   end
 end
@@ -186,6 +206,7 @@ def draw_jimmy args
     if countdown(args) == 0
       # Set the shootout start time to the current tick, once.
       args.state.shootout_start ||= args.state.tick_count
+      args.state.is_ending = true
 
       # Calculate for how long should the gun be animated.
       gun_index = args.state.shootout_start.frame_index(2, 4, false)
@@ -193,9 +214,40 @@ def draw_jimmy args
       # Play gunshot sound only once.
       if args.state.shootout_start == args.state.tick_count
         args.outputs.sounds << 'sounds/gunshot.wav'
+
+        # Define bullet paths.
+        base_to_lamp = {start_x: 690, end_x: 630, start_y: 230, end_y: 520, angle: -77}
+        gun_to_aiyaman = {start_x: 700, end_x: 400, start_y: 304, end_y: 304}
+        gun_to_table = {start_x: 700, end_x: 650, start_y: 304, end_y: 304}
+        table_to_aiyaman = {start_x: 540, end_x: 400, start_y: 280, end_y: 280}
+        table_to_lamp = {start_x: 620, end_x: 620, start_y: 340, end_y: 520, angle: -90}
+        table_to_base = {start_x: 660, end_x: 685, start_y: 270, end_y: 230, angle: 120}
+        lamp_to_aiyaman = {start_x: 580, end_x: 400, start_y: 540, end_y: 360, angle: 45}
+        lamp_to_jimmy = {start_x: 630, end_x: 860, start_y: 550, end_y: 380, angle: 140}
+        lamp_to_magnet = {start_x: 570, end_x: 260, start_y: 560, end_y: 490, angle: 15}
+        lamp_to_shuriken = {start_x: 660, end_x: 1000, start_y: 550, end_y: 400, angle: 155}
+        lamp_to_table = {start_x: 608, end_x: 588, start_y: 520, end_y: 320, angle: 80}
+
+        # If the table is not rotated, set first path to aiyaman, else to table.
+        bang = args.state.rotations['table'] == 0 ? [gun_to_aiyaman] : [gun_to_table]
+
+        # Depending on the rotation of the table, either there is no ricochet or deflect to lamp.
+        table = [[nil], [table_to_lamp], [table_to_base, base_to_lamp]][args.state.rotations['table']]
+
+        # Depending on the rotation of the table, set the bullet paths for lamp.
+        lamp = [[nil], [lamp_to_aiyaman], [lamp_to_jimmy]]
+        lamp_skewed = [[lamp_to_table, table_to_aiyaman], [lamp_to_magnet], [lamp_to_shuriken]]
+        lamp_select = [[[nil]], lamp, lamp_skewed][args.state.rotations['table']][args.state.rotations['lightbowl']]
+
+        # Determine the paths which the bullet will take based on table and lamp configurations.
+        args.state.bullet_paths = (bang + table + lamp_select).compact
+
+        # Set bullet bounce time to start from now.
+        args.state.bullet_bounce = args.state.tick_count
       end
     end
     
+    # Reset gun index to 0.
     gun_index ||= 0
 
     # Draw the sprite at the interpolated position.
