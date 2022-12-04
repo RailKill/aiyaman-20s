@@ -1,3 +1,5 @@
+require 'app/cutscene.rb'
+
 def tick args
   # Initialize state of interactable sprites in the game. The "||=" operator sets the value only if uninitialized.
   # Which means, it will only run once at the beginning of the game.
@@ -17,31 +19,35 @@ def tick args
   args.state.seconds_to_live ||= 20
   args.state.timer ||= args.state.tick_count
 
-  # Draw static sprites.
-  args.outputs.sprites << {x: 0, y: 120, w: 1280, h: 660, path: 'sprites/wall.png'}
-  args.outputs.sprites << {x: 0, y: 60, w: 300, h: 342, path: 'sprites/lab.png'}
-  
-  # Draw interactables.
-  draw_interactable(args, 'birdstand', {x: 420, y: 592, w: 90, h: 128})
-  draw_interactable(args, 'birdy', {x: 440, y: 616, w: 56, h: 82}, 'birdstand')
-  draw_interactable(args, 'clock', {x: 148, y: 262, w: 140, h: 66})
-  draw_interactable(args, 'frame', {x: 890, y: 440, w: 184, h: 220})
-  draw_interactable(args, 'gas', {x: 1050, y: 60, w: 128, h: 260, angle_anchor_y: 0.2})
-  draw_interactable(args, 'lightbowl', {x: 635, y: 550, w: 70, h: 48, angle_anchor_y: 0.7})
-  draw_interactable(args, 'lightfixture', {x: 660, y: 580, w: 21, h: 140})
-  draw_interactable(args, 'magnet' + (args.state.is_magnet_destroyed ? 'broken' : ''), {x: 230, y: 470, w: 78, h: 88})
-  draw_interactable(args, 'pizzamonster', {x: 903, y: 484, w: 154, h: 130}, 'frame')
-  draw_interactable(args, 'table', {x: 540, y: args.state.rotations['table'] == 0 ? 60 : 120, w: 248, h: 165})
-  draw_interactable(args, 'tnp', {x: 905, y: 481, w: 140, h: 164}, 'frame')
+  if args.state.cutscene_start
+    play_cutscene args
+  else
+    # Draw static sprites.
+    args.outputs.sprites << {x: 0, y: 120, w: 1280, h: 660, path: 'sprites/wall.png'}
+    args.outputs.sprites << {x: 0, y: 60, w: 300, h: 342, path: 'sprites/lab.png'}
+    
+    # Draw interactables.
+    draw_interactable(args, 'birdstand', {x: 420, y: 592, w: 90, h: 128})
+    draw_interactable(args, 'birdy', {x: 440, y: 616, w: 56, h: 82}, 'birdstand')
+    draw_interactable(args, 'clock', {x: 148, y: 262, w: 140, h: 66})
+    draw_interactable(args, 'frame', {x: 890, y: 440, w: 184, h: 220})
+    draw_interactable(args, 'gas', {x: 1050, y: 60, w: 128, h: 260, angle_anchor_y: 0.2})
+    draw_interactable(args, 'lightbowl', {x: 635, y: 550, w: 70, h: 48, angle_anchor_y: 0.7})
+    draw_interactable(args, 'lightfixture', {x: 660, y: 580, w: 21, h: 140})
+    draw_interactable(args, 'magnet' + (args.state.is_magnet_destroyed ? 'broken' : ''), {x: 230, y: 470, w: 78, h: 88})
+    draw_interactable(args, 'pizzamonster', {x: 903, y: 484, w: 154, h: 130}, 'frame')
+    draw_interactable(args, 'table', {x: 540, y: args.state.rotations['table'] == 0 ? 60 : 120, w: 248, h: 165})
+    draw_interactable(args, 'tnp', {x: 905, y: 481, w: 140, h: 164}, 'frame')
 
-  # Draw characters.
-  draw_aiyaman args
-  draw_bullet args
-  draw_jimmy args
+    # Draw characters.
+    draw_aiyaman args
+    draw_bullet args
+    draw_jimmy args
 
-  # Draw timer.
-  args.outputs.labels << {x: 170, y: 312, text: "%05.2f" % countdown(args).to_s, size_enum: 8,
-      r: args.state.highlights['clock'] == 1 ? 225 : 0}
+    # Draw timer.
+    args.outputs.labels << {x: 170, y: 312, text: "%05.2f" % countdown(args).to_s, size_enum: 8,
+        r: args.state.highlights['clock'] == 1 ? 225 : 0}
+  end
 
   # Prompts player to start the game, or show failure message if game ended.
   check_game_state args
@@ -50,7 +56,7 @@ end
 
 # Game start, fail state and music check.
 def check_game_state args
-  if !args.state.is_playing
+  if !args.state.is_playing && !args.state.failure && !args.state.cutscene_start
     # If the game has not started yet, display instructions.
     args.outputs.labels <<  { x: 640, y: 360, text: 'Press "Space" to Start',
         alignment_enum: 1, vertical_alignment_enum: 1 }
@@ -72,8 +78,9 @@ def check_game_state args
   end
 
   # If the player has failed, show failure label.
-  if args.state.failure
-    message = 'You have died. Press "Space" or "R" to restart.'
+  if args.state.failure || args.state.win_time && (args.state.tick_count > args.state.win_time + 3.seconds)
+    message = args.state.failure ? 'You have died. Press "Space" or "R" to restart.' :
+        "You have won with #{'%.2f' % args.state.record_time} seconds to spare."
     cause = get_cause args
     color = args.state.explosion && args.state.failure ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 }
 
@@ -84,7 +91,9 @@ def check_game_state args
   end
 
   # Allow game reset.
-  if args.inputs.keyboard.key_down.r || args.state.failure && args.inputs.keyboard.key_down.space
+  if args.inputs.keyboard.key_down.r ||
+      (args.state.failure || args.state.win_time && args.state.tick_count > args.state.win_time + 3.seconds) &&
+      args.inputs.keyboard.key_down.space
     args.gtk.reset
   end
 end
@@ -110,7 +119,9 @@ def draw_aiyaman args
   sprite_index = args.state.animation_start.frame_index(number_of_sprites, frames_per_sprite, is_looping)
 
   # When sprite_index is nil due to animation end, set it to the second last sprite.
-  sprite_index ||= args.state.failure ? number_of_sprites : args.state.is_playing ? number_of_sprites - 2 : 0
+  sprite_index ||= args.state.failure ? number_of_sprites : 
+      args.state.cutscene_delay ? 8 :
+      args.state.is_playing ? number_of_sprites - 2 : 0
 
   # Send aiyaman flying if failure state is reached.
   if args.state.failure
@@ -196,6 +207,7 @@ def draw_interactable(args, id, rect, combine = id)
   if id == 'clock' && !args.state.is_ending && args.state.is_playing &&
         args.inputs.mouse.inside_rect?(rect) && args.inputs.mouse.click
     args.state.is_ending = true
+    args.state.record_time ||= countdown(args)
     args.state.seconds_to_live = 0
   end
 
@@ -324,7 +336,7 @@ def draw_shuriken(args, jimmy_x, jimmy_y)
   else
     # If shuriken is mid-flight and magnet is in the right position, change its course.
     if shuriken_x < jimmy_x - 200 && is_magnetized
-      args.state.shuriken_magnetized ||= args.state.tick_count
+      args.state.shuriken_magnetized ||= args.state.tick_count      
       change_time = args.state.shuriken_magnetized.ease(0.7.seconds, :flip, :quad, :flip)
       change_start_x = 620
       change_start_y = 380
@@ -334,6 +346,20 @@ def draw_shuriken(args, jimmy_x, jimmy_y)
       change_end_y = 480
       shuriken_x = quadratic_bezier(change_time, change_start_x, change_curve_x, change_end_x)
       shuriken_y = quadratic_bezier(change_time, change_start_y, change_curve_y, change_end_y)
+
+      if args.state.shuriken_magnetized == args.state.tick_count
+        args.outputs.sounds << 'sounds/magnet.wav'
+      end
+
+      if shuriken_x == change_end_x
+        args.state.cutscene_delay ||= args.state.tick_count
+        if args.state.tick_count == args.state.cutscene_delay
+          args.outputs.sounds << 'sounds/ha.wav'
+        end
+        if args.state.tick_count > args.state.cutscene_delay + 1.seconds
+          args.state.cutscene_start ||= args.state.tick_count
+        end
+      end
     end
     # Shuriken is stationary or in-flight, draw it normally.
     args.outputs.sprites << { x: shuriken_x, y: shuriken_y, w: 56, h: 66, angle: args.state.spin.shuriken,
@@ -395,12 +421,16 @@ end
 
 # Returns the cause of success or failure.
 def get_cause args
-  if args.state.explosion
-    return 'You hit the gas tank and killed yourself.'
-  elsif args.state.shuriken_throw
-    return 'You deflected the bullet, but did not stop the shuriken.'
+  if args.state.failure
+    if args.state.explosion
+      return 'You hit the gas tank and killed yourself.'
+    elsif args.state.shuriken_throw
+      return 'You deflected the bullet, but did not stop the shuriken.'
+    else
+      return 'Try clicking various objects in the environment.'
+    end
   else
-    return 'Try clicking various objects in the environment.'
+    return 'Jimms burnt.'
   end
 end
 
