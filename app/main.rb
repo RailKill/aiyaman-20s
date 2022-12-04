@@ -80,7 +80,7 @@ def check_game_state args
   # If the player has failed, show failure label.
   if args.state.failure || args.state.win_time && (args.state.tick_count > args.state.win_time + 3.seconds)
     message = args.state.failure ? 'You have died. Press "Space" or "R" to restart.' :
-        "You have won with #{'%.2f' % args.state.record_time} seconds to spare."
+        "You have won with #{args.state.record_time ? '%.2f' % args.state.record_time : 0} seconds to spare."
     cause = get_cause args
     color = args.state.explosion && args.state.failure ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 }
 
@@ -266,7 +266,7 @@ def draw_jimmy args
         lamp_select = [[[nil]], lamp, lamp_skewed][args.state.rotations['table']][args.state.rotations['lightbowl']]
 
         # Determine the paths which the bullet will take based on table and lamp configurations.
-        args.state.bullet_paths = (bang + table + lamp_select).compact
+        args.state.bullet_paths = (bang + table + (lamp_select ? lamp_select : [])).compact
 
         # Set bullet bounce time to start from now.
         args.state.bullet_bounce = args.state.tick_count
