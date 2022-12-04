@@ -161,15 +161,22 @@ def draw_bullet args
         args.state.shuriken_throw ||= args.state.tick_count
         if args.state.shuriken_throw == args.state.tick_count
           args.outputs.sounds << 'sounds/mini-woosh.wav'
+          args.outputs.sounds << 'sounds/metal-break.wav'
         end
         # TODO: Introduce delay to dropped to make it more natural.
         args.state.shuriken_dropped ||= args.state.tick_count
       # It reached jimmy. Remove sunglasses.
       elsif current_x == 860 && current_y == 380
         args.state.sunglasses_removed ||= args.state.tick_count
+        if args.state.sunglasses_removed == args.state.tick_count
+          args.outputs.sounds << 'sounds/wham.wav'
+        end
       # It reached the shuriken. Drop it.
       elsif current_x == 1000 && current_y == 400
         args.state.shuriken_dropped ||= args.state.tick_count
+        if args.state.shuriken_dropped == args.state.tick_count
+          args.outputs.sounds << 'sounds/wham.wav'
+        end
       end
     end
   end
