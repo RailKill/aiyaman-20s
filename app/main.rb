@@ -314,13 +314,27 @@ def draw_shuriken(args, jimmy_x, jimmy_y)
   end
 
   # Check if shuriken needs to be drawn or trigger any event.
-  if shuriken_x == jimmy_x - 400 && shuriken_y == jimmy_y + 260
+  is_magnetized = args.state.rotations['magnet'] == 1 && !args.state.is_magnet_destroyed
+  if shuriken_x == jimmy_x - 400 && shuriken_y == jimmy_y + 260 && !is_magnetized
     # Shuriken reached aiyaman.
     kill_aiyaman args
   elsif shuriken_x == jimmy_x + 290 && shuriken_y == jimmy_y + 110
     # Shuriken reached gas tank.
     explode args
   else
+    # If shuriken is mid-flight and magnet is in the right position, change its course.
+    if shuriken_x < jimmy_x - 200 && is_magnetized
+      args.state.shuriken_magnetized ||= args.state.tick_count
+      change_time = args.state.shuriken_magnetized.ease(0.7.seconds, :flip, :quad, :flip)
+      change_start_x = 620
+      change_start_y = 380
+      change_curve_x = change_start_x
+      change_curve_y = change_start_y + 150
+      change_end_x = 300
+      change_end_y = 480
+      shuriken_x = quadratic_bezier(change_time, change_start_x, change_curve_x, change_end_x)
+      shuriken_y = quadratic_bezier(change_time, change_start_y, change_curve_y, change_end_y)
+    end
     # Shuriken is stationary or in-flight, draw it normally.
     args.outputs.sprites << { x: shuriken_x, y: shuriken_y, w: 56, h: 66, angle: args.state.spin.shuriken,
         path: 'sprites/shuriken.png' }
@@ -353,6 +367,7 @@ def draw_sunglasses(args, jimmy_x, jimmy_y)
       end
     end
 
+    # Delay shuriken travel to make it look more natural.
     if glasses_y < 350
       args.state.shuriken_dropped ||= args.state.tick_count
     end
