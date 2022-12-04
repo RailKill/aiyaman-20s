@@ -9,7 +9,6 @@ def tick args
   args.state.angles['magnet'] ||= [0, -90, -180, -270]
   args.state.angles['magnetbroken'] ||= [0, -90, -180, -270]
   args.state.angles['table'] ||= [0, -45, 45]
-  args.state.birdflip ||= 0
 
   # Define the path the bullet can take during the shootout phase.
   args.state.bullet_phase ||= 0
@@ -28,16 +27,16 @@ def tick args
     
     # Draw interactables.
     draw_interactable(args, 'birdstand', {x: 420, y: 592, w: 90, h: 128})
-    draw_interactable(args, 'birdy', {x: 440, y: 616, w: 56, h: 82}, 'birdstand')
+    draw_interactable(args, 'birdy', {x: 437, y: 616, w: 56, h: 82, flip_horizontally: args.state.birdflip}, 'birdstand')
     draw_interactable(args, 'clock', {x: 148, y: 262, w: 140, h: 66})
     draw_interactable(args, 'frame', {x: 890, y: 440, w: 184, h: 220})
     draw_interactable(args, 'gas', {x: 1050, y: 60, w: 128, h: 260, angle_anchor_y: 0.2})
     draw_interactable(args, 'lightbowl', {x: 635, y: 550, w: 70, h: 48, angle_anchor_y: 0.7})
     draw_interactable(args, 'lightfixture', {x: 660, y: 580, w: 21, h: 140})
     draw_interactable(args, 'magnet' + (args.state.is_magnet_destroyed ? 'broken' : ''), {x: 230, y: 470, w: 78, h: 88})
-    draw_interactable(args, 'pizzamonster', {x: 903, y: 484, w: 154, h: 130}, 'frame')
+    draw_interactable(args, 'pizzamonster', {x: 903, y: 484, w: 154, h: 130, a: args.state.is_tnp ? 0 : 255}, 'frame')
     draw_interactable(args, 'table', {x: 540, y: args.state.rotations['table'] == 0 ? 60 : 120, w: 248, h: 165})
-    draw_interactable(args, 'tnp', {x: 905, y: 481, w: 140, h: 164}, 'frame')
+    draw_interactable(args, 'tnp', {x: 905, y: 481, w: 140, h: 164, a: args.state.is_tnp ? 255 : 0}, 'frame')
 
     # Draw characters.
     draw_aiyaman args
@@ -170,12 +169,11 @@ def draw_bullet args
         args.state.is_magnet_destroyed = true
         args.state.rotations['magnetbroken'] = args.state.rotations['magnet']
         args.state.shuriken_throw ||= args.state.tick_count
+        args.state.shuriken_dropped ||= args.state.tick_count
         if args.state.shuriken_throw == args.state.tick_count
           args.outputs.sounds << 'sounds/mini-woosh.wav'
           args.outputs.sounds << 'sounds/metal-break.wav'
-        end
-        # TODO: Introduce delay to dropped to make it more natural.
-        args.state.shuriken_dropped ||= args.state.tick_count
+        end        
       # It reached jimmy. Remove sunglasses.
       elsif current_x == 860 && current_y == 380
         args.state.sunglasses_removed ||= args.state.tick_count
@@ -187,6 +185,15 @@ def draw_bullet args
         args.state.shuriken_dropped ||= args.state.tick_count
         if args.state.shuriken_dropped == args.state.tick_count
           args.outputs.sounds << 'sounds/wham.wav'
+        end
+      # It reached the picture frame. Change it.
+      elsif current_x == 900 && current_y == 510
+        args.state.shuriken_throw ||= args.state.tick_count
+        args.state.shuriken_dropped ||= args.state.tick_count
+        if args.state.shuriken_throw == args.state.tick_count
+          args.outputs.sounds << 'sounds/mini-woosh.wav'
+          args.outputs.sounds << (args.state.is_tnp ? 'sounds/tnp-death.wav' : 'sounds/pizza-death.wav')
+          args.state.is_tnp ^= 1
         end
       end
     end
@@ -202,13 +209,22 @@ def draw_interactable(args, id, rect, combine = id)
 
   # Update the rotation of the sprite.
   rotated = rotate(args, id, rect)
-
-  # If clock is interacted with, trigger end game shootout.
-  if id == 'clock' && !args.state.is_ending && args.state.is_playing &&
-        args.inputs.mouse.inside_rect?(rect) && args.inputs.mouse.click
-    args.state.is_ending = true
-    args.state.record_time ||= countdown(args)
-    args.state.seconds_to_live = 0
+  
+  is_clicked = args.inputs.mouse.inside_rect?(rect) && args.inputs.mouse.click
+  if !args.state.is_ending && args.state.is_playing && is_clicked
+    args.state.has_interacted = true if id != 'clock'
+    # If clock is interacted with, trigger end game shootout.
+    if id == 'clock'
+      args.state.is_ending = true
+      args.state.record_time ||= countdown(args)
+      args.state.seconds_to_live = 0
+    # If picture frame is interacted with, change picture.
+    elsif id == 'frame'
+      args.state.is_tnp ^= 1
+    # If birdstand is interacted with, flip bird.
+    elsif id == 'birdstand'
+      args.state.birdflip ^= 1
+    end
   end
 
   # Draw the sprite.
@@ -246,8 +262,9 @@ def draw_jimmy args
         gun_to_aiyaman = {start_x: 700, end_x: 400, start_y: 304, end_y: 304}
         gun_to_table = {start_x: 700, end_x: 650, start_y: 304, end_y: 304}
         table_to_aiyaman = {start_x: 540, end_x: 400, start_y: 280, end_y: 280}
-        table_to_lamp = {start_x: 620, end_x: 620, start_y: 340, end_y: 520, angle: -90}
         table_to_base = {start_x: 660, end_x: 685, start_y: 270, end_y: 230, angle: 120}
+        table_to_frame = {start_x: 650, end_x: 900, start_y: 330, end_y: 510, angle: -140}
+        table_to_lamp = {start_x: 620, end_x: 620, start_y: 340, end_y: 520, angle: -90}
         lamp_to_aiyaman = {start_x: 580, end_x: 400, start_y: 540, end_y: 360, angle: 45}
         lamp_to_jimmy = {start_x: 630, end_x: 860, start_y: 550, end_y: 380, angle: 140}
         lamp_to_magnet = {start_x: 570, end_x: 260, start_y: 560, end_y: 490, angle: 15}
@@ -261,7 +278,7 @@ def draw_jimmy args
         table = [[nil], [table_to_lamp], [table_to_base, base_to_lamp]][args.state.rotations['table']]
 
         # Depending on the rotation of the table, set the bullet paths for lamp.
-        lamp = [[nil], [lamp_to_aiyaman], [lamp_to_jimmy]]
+        lamp = [[lamp_to_table, table_to_frame], [lamp_to_aiyaman], [lamp_to_jimmy]]
         lamp_skewed = [[lamp_to_table, table_to_aiyaman], [lamp_to_magnet], [lamp_to_shuriken]]
         lamp_select = [[[nil]], lamp, lamp_skewed][args.state.rotations['table']][args.state.rotations['lightbowl']]
 
@@ -422,10 +439,16 @@ end
 # Returns the cause of success or failure.
 def get_cause args
   if args.state.failure
-    if args.state.explosion
+    if args.state.record_time && !args.state.has_interacted
+      return 'The clock resumes time. Interact with other objects first.'
+    elsif args.state.explosion
       return 'You hit the gas tank and killed yourself.'
     elsif args.state.shuriken_throw
       return 'You deflected the bullet, but did not stop the shuriken.'
+    elsif args.state.rotations['table'] != 0
+      return 'Try deflecting the bullet somewhere else.'
+    elsif args.state.has_interacted
+      return 'Perhaps you should find an obstacle to block the bullet.'
     else
       return 'Try clicking various objects in the environment.'
     end
