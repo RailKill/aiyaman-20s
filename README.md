@@ -5,13 +5,15 @@ to interact with the objects and save Aiyaman from death.
 
 
 ## Licensing and Credits
-This project in its entirety is under the [CC0 public domain license](https://creativecommons.org/publicdomain/zero/1.0/).
+This project in its entirety is under the
+[CC0 public domain license](https://creativecommons.org/publicdomain/zero/1.0/).
 This includes the following third-party assets that were used for this game:
 
 | Asset | Original | Modified | Author | License |
 | --- | --- | --- | --- | --- |
-| [Gunshots](https://opengameart.org/content/gunshots) | Unkown.wav | sounds/gunshot.wav | kurt | CC0 |
 | [Ambient Bird Sounds](https://opengameart.org/content/ambient-bird-sounds) | birds-isaiah658.ogg  | sounds/birdstand-[0-2].wav | isaiah658 | CC0 |
+| [Chunky Explosion](https://opengameart.org/content/chunky-explosion) | Chunky Explosion.mp3 | sounds/explosion.wav | Joth | CC0 |
+| [Gunshots](https://opengameart.org/content/gunshots) | Unkown.wav | sounds/gunshot.wav | kurt | CC0 |
 | [Atmospheric Interaction Sound Pack](https://opengameart.org/content/atmospheric-interaction-sound-pack) | space/link.wav | sounds/resume.wav | legoluft | CC0 |
 | [Reversing Time](https://opengameart.org/content/reversing-time-stuck-in-time) | Reverse-Time-Loop-isaiah658.ogg | sounds/reverse-time.ogg | isaiah658 | CC0 |
 | [Time Slow](https://opengameart.org/content/time-slow) | time_stop.mp3 | sounds/time-stop.ogg | MidFag | CC0 |

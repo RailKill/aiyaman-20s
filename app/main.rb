@@ -74,10 +74,13 @@ def check_game_state args
   # If the player has failed, show failure label.
   if args.state.failure
     message = 'You have died. Press "Space" or "R" to restart.'
-    cause = 'Try clicking various objects in the environment.'
+    cause = get_cause args
+    color = args.state.explode && args.state.failure ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 }
 
-    args.outputs.labels << { x: 640, y: 374, text: message, alignment_enum: 1, vertical_alignment_enum: 1 }
-    args.outputs.labels << { x: 640, y: 346, text: cause, alignment_enum: 1, vertical_alignment_enum: 1, size_enum: -2 }
+    args.outputs.labels << { x: 640, y: 374, text: message,
+        alignment_enum: 1, vertical_alignment_enum: 1 }.merge(color)
+    args.outputs.labels << { x: 640, y: 346, text: cause,
+        alignment_enum: 1, vertical_alignment_enum: 1, size_enum: -2 }.merge(color)
   end
 
   # Allow game reset.
@@ -152,7 +155,7 @@ def draw_bullet args
     else
       # It reached aiyaman. End the game in failure.
       if current_x == 400 && current_y <= 360
-        args.state.failure ||= args.state.tick_count
+        kill_aiyaman args
       # It reached the magnet. Destroy it.
       elsif current_x == 260 && current_y == 490
         args.state.is_magnet_destroyed = true
@@ -253,12 +256,106 @@ def draw_jimmy args
     # Draw the sprite at the interpolated position.
     args.outputs.sprites << { x: current_x, y: current_y, w: 312, h: 386, path: 'sprites/jimmy/throw-0.png'}
 
-    # Draw jimmy's equipments together with him as well.
+    # Draw jimmy's gun.
     args.outputs.sprites << { x: current_x - 40, y: current_y + 230, w: 76, h: 46,
         path: "sprites/gun-#{gun_index}.png" }
-    args.outputs.sprites << { x: current_x + 270, y: current_y + 310, w: 56, h: 66, path: 'sprites/shuriken.png' }
-    args.outputs.sprites << { x: current_x + 130, y: current_y + 310, w: 60, h: 20, path: 'sprites/sunglasses.png' }
+
+    # Draw shuriken.
+    draw_shuriken(args, current_x, current_y)
+
+    # Draw sunglasses.
+    draw_sunglasses(args, current_x, current_y)
+    
   end
+end
+
+# Draws jimmy's shuriken based on his position.
+def draw_shuriken(args, jimmy_x, jimmy_y)
+  # Declare shuriken position.
+  args.state.spin.shuriken ||= 0
+  args.state.spin.shuriken += args.state.shuriken_dropped ? 30 : 0
+  shuriken_x = jimmy_x + 270
+  shuriken_y = jimmy_y + 310
+
+  # If the shuriken is being dropped or shot out of hand, determine its path.
+  if args.state.shuriken_dropped
+    # Calculate current time interpolation from the dropped time.
+    shuriken_time = args.state.shuriken_dropped.ease(0.7.seconds, :flip, :quad, :flip)
+    # Check if the table and lamp are rotated in the right way for shuriken to be dropped.
+    shuriken_condition = args.state.rotations['table'] == 2  && args.state.rotations['lightbowl'] == 2
+    # Calculate the shuriken curve.
+    shuriken_curve_x = shuriken_condition ? shuriken_x + 10 : shuriken_x - 335
+    shuriken_end_x = shuriken_condition ? shuriken_x + 20 : shuriken_x - 670
+    shuriken_curve_y = shuriken_condition ? shuriken_y + 100 : shurken_y + 200
+    shuriken_end_y = shuriken_condition ? shuriken_y - 200 : shurken_y - 50
+    # Apply changes to shuriken position based on quadratic bezier curve.
+    shuriken_x = quadratic_bezier(shuriken_time, shuriken_x, shuriken_curve_x, shuriken_end_x)
+    shuriken_y = quadratic_bezier(shuriken_time, shuriken_y, shuriken_curve_y, shuriken_end_y)
+  end
+
+  # Check if shuriken needs to be drawn or trigger any event.
+  if shuriken_x == jimmy_x - 400 && shuriken_y == jimmy_y + 260
+    # Shuriken reached aiyaman.
+    kill_aiyaman args
+  elsif shuriken_x == jimmy_x + 290 && shuriken_y == jimmy_y + 110
+    # Shuriken reached gas tank.
+    explode args
+  else
+    # Shuriken is stationary or in-flight, draw it normally.
+    args.outputs.sprites << { x: shuriken_x, y: shuriken_y, w: 56, h: 66, angle: args.state.spin.shuriken,
+        path: 'sprites/shuriken.png' }
+  end
+end
+
+# Draws jimmy's sunglasses based on his position.
+def draw_sunglasses(args, jimmy_x, jimmy_y)
+  # Declare sunglasses position.
+  args.state.spin.sunglasses ||= 0
+  args.state.spin.sunglasses += args.state.sunglasses_removed ? 5 : 0
+  glasses_x = jimmy_x + 130
+  glasses_y = jimmy_y + 310
+
+  args.outputs.sprites << { x: glasses_x, y: glasses_y, w: 60, h: 20, path: 'sprites/sunglasses.png' }
+end
+
+
+# Determines if a gas tank explosion has happened.
+def explode args
+  args.state.explode ||= args.state.tick_count
+  if args.state.explode == args.state.tick_count
+    args.outputs.sounds << 'sounds/explosion.wav'
+    kill_aiyaman args
+  end
+
+  # Draw an expanding circle to represent the explosion.
+  args.state.boom ||= { x: 1065, y: 80, w: 100, h: 100 }
+  args.state.boom = args.state.boom.w < 2000 ? args.state.boom.scale_rect(1.5, 0.5, 0.5) : args.state.boom
+  args.outputs.primitives << args.state.boom.merge({primitive_marker: :solid})
+end
+
+
+# Returns the cause of success or failure.
+def get_cause args
+  if args.state.explode
+    return 'You hit the gas tank and killed yourself.'
+  else
+    return 'Try clicking various objects in the environment.'
+  end
+end
+
+
+# Trigger game over by killing aiyaman.
+def kill_aiyaman args
+  args.state.failure ||= args.state.tick_count
+end
+
+
+# Interpolate and draw a bezier curve for smooth movement.
+# Reference: https://devforum.roblox.com/t/how-to-tweenlerp-a-bezier-curve/1174077
+def quadratic_bezier(time, start, curve, endpoint)
+  a = start + (curve - start) * time
+  b = curve + (endpoint - curve) * time
+  return a + (b - a) * time
 end
 
 
