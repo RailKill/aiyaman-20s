@@ -75,7 +75,7 @@ def check_game_state args
   if args.state.failure
     message = 'You have died. Press "Space" or "R" to restart.'
     cause = get_cause args
-    color = args.state.explode && args.state.failure ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 }
+    color = args.state.explosion && args.state.failure ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 }
 
     args.outputs.labels << { x: 640, y: 374, text: message,
         alignment_enum: 1, vertical_alignment_enum: 1 }.merge(color)
@@ -133,8 +133,6 @@ end
 
 # Draws the bullet, which only happens when during end-game shootout where 'args.state.is_ending' is true.
 def draw_bullet args
-  #args.outputs.sprites << { x: 1000, y: 400, w: 108, h: 12, angle: 155, path: 'sprites/bullet-0.png' }
-
   if args.state.is_ending && args.state.shootout_start
     # Interpolate the x and y positions given the bullet path of the current bullet phase.
     interpolation = args.state.bullet_bounce.ease(3, :identity)
@@ -160,6 +158,12 @@ def draw_bullet args
       elsif current_x == 260 && current_y == 490
         args.state.is_magnet_destroyed = true
         args.state.rotations['magnetbroken'] = args.state.rotations['magnet']
+        args.state.shuriken_throw ||= args.state.tick_count
+        if args.state.shuriken_throw == args.state.tick_count
+          args.outputs.sounds << 'sounds/mini-woosh.wav'
+        end
+        # TODO: Introduce delay to dropped to make it more natural.
+        args.state.shuriken_dropped ||= args.state.tick_count
       # It reached jimmy. Remove sunglasses.
       elsif current_x == 860 && current_y == 380
         args.state.sunglasses_removed ||= args.state.tick_count
@@ -253,8 +257,15 @@ def draw_jimmy args
     # Reset gun index to 0.
     gun_index ||= 0
 
+    # Determine if jimmy is playing animation to throw shuriken.
+    if args.state.shuriken_throw
+      sprite_index = args.state.shuriken_throw.frame_index(3, 4, false)
+    end
+    sprite_index ||= args.state.shuriken_throw ? 4 : 0
+
     # Draw the sprite at the interpolated position.
-    args.outputs.sprites << { x: current_x, y: current_y, w: 312, h: 386, path: 'sprites/jimmy/throw-0.png'}
+    args.outputs.sprites << { x: current_x, y: current_y, w: 312, h: 386,
+        path: "sprites/jimmy/throw-#{sprite_index}.png" }
 
     # Draw jimmy's gun.
     args.outputs.sprites << { x: current_x - 40, y: current_y + 230, w: 76, h: 46,
@@ -279,15 +290,17 @@ def draw_shuriken(args, jimmy_x, jimmy_y)
 
   # If the shuriken is being dropped or shot out of hand, determine its path.
   if args.state.shuriken_dropped
-    # Calculate current time interpolation from the dropped time.
-    shuriken_time = args.state.shuriken_dropped.ease(0.7.seconds, :flip, :quad, :flip)
     # Check if the table and lamp are rotated in the right way for shuriken to be dropped.
     shuriken_condition = args.state.rotations['table'] == 2  && args.state.rotations['lightbowl'] == 2
+    # Calculate current time interpolation from the dropped time.
+    ease_method = shuriken_condition ? [:flip, :quad, :flip] : [:identity]
+    duration = shuriken_condition ? 0.7 : 0.3
+    shuriken_time = args.state.shuriken_dropped.ease(duration.seconds, ease_method)
     # Calculate the shuriken curve.
     shuriken_curve_x = shuriken_condition ? shuriken_x + 10 : shuriken_x - 335
     shuriken_end_x = shuriken_condition ? shuriken_x + 20 : shuriken_x - 670
-    shuriken_curve_y = shuriken_condition ? shuriken_y + 100 : shurken_y + 200
-    shuriken_end_y = shuriken_condition ? shuriken_y - 200 : shurken_y - 50
+    shuriken_curve_y = shuriken_condition ? shuriken_y + 100 : shuriken_y + 200
+    shuriken_end_y = shuriken_condition ? shuriken_y - 200 : shuriken_y - 50
     # Apply changes to shuriken position based on quadratic bezier curve.
     shuriken_x = quadratic_bezier(shuriken_time, shuriken_x, shuriken_curve_x, shuriken_end_x)
     shuriken_y = quadratic_bezier(shuriken_time, shuriken_y, shuriken_curve_y, shuriken_end_y)
@@ -311,18 +324,42 @@ end
 def draw_sunglasses(args, jimmy_x, jimmy_y)
   # Declare sunglasses position.
   args.state.spin.sunglasses ||= 0
-  args.state.spin.sunglasses += args.state.sunglasses_removed ? 5 : 0
+  args.state.spin.sunglasses += args.state.sunglasses_removed ? -5 : 0
   glasses_x = jimmy_x + 130
   glasses_y = jimmy_y + 310
 
-  args.outputs.sprites << { x: glasses_x, y: glasses_y, w: 60, h: 20, path: 'sprites/sunglasses.png' }
+  if args.state.sunglasses_removed
+    # Calculate time interpolation from when sunglasses were removed.
+    time = args.state.sunglasses_removed.ease(0.7.seconds, :flip, :quad, :flip)
+    curve_x = glasses_x + 10
+    curve_y = glasses_y + 100
+    end_x = glasses_x + 20
+    end_y = glasses_y - 600
+    glasses_x = quadratic_bezier(time, glasses_x, curve_x, end_x)
+    glasses_y = quadratic_bezier(time, glasses_y, curve_y, end_y)
+
+    # Once glasses fall to a certain height, trigger shuriken throw.
+    if glasses_y < 400
+      args.state.shuriken_throw ||= args.state.tick_count
+      if args.state.shuriken_throw == args.state.tick_count
+        args.outputs.sounds << 'sounds/mini-woosh.wav'
+      end
+    end
+
+    if glasses_y < 350
+      args.state.shuriken_dropped ||= args.state.tick_count
+    end
+  end
+
+  args.outputs.sprites << { x: glasses_x, y: glasses_y, w: 60, h: 20, angle: args.state.spin.sunglasses,
+      path: 'sprites/sunglasses.png' }
 end
 
 
 # Determines if a gas tank explosion has happened.
 def explode args
-  args.state.explode ||= args.state.tick_count
-  if args.state.explode == args.state.tick_count
+  args.state.explosion ||= args.state.tick_count
+  if args.state.explosion == args.state.tick_count
     args.outputs.sounds << 'sounds/explosion.wav'
     kill_aiyaman args
   end
@@ -336,8 +373,10 @@ end
 
 # Returns the cause of success or failure.
 def get_cause args
-  if args.state.explode
+  if args.state.explosion
     return 'You hit the gas tank and killed yourself.'
+  elsif args.state.shuriken_throw
+    return 'You deflected the bullet, but did not stop the shuriken.'
   else
     return 'Try clicking various objects in the environment.'
   end
@@ -347,6 +386,10 @@ end
 # Trigger game over by killing aiyaman.
 def kill_aiyaman args
   args.state.failure ||= args.state.tick_count
+  if args.state.failure == args.state.tick_count
+    args.outputs.sounds << 'sounds/stab.wav'
+    args.outputs.sounds << 'sounds/aiyaa.wav'
+  end
 end
 
 
